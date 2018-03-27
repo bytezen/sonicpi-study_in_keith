@@ -1,83 +1,117 @@
 
-class SonicPi::Note
-  
-  def pc
-    self.midi_note % 12
-  end
-  
-  
-end
-
-class SonicPi::Core::RingVector
-  def pc
-    """
-    return the pitch class of each note in the ring
-    """
-    return self.map{|el| el % 12 }
-  end
-  
-  def pc? (n)
-    """
-    return true if any notes in the ring are in the pitch class of n
-    """
-    self.any? {|el| el % 12 == n % 12 }
-  end
-  
-  
+##| module BytezenExtensions
+define :notes_info do |xs|
+  ret = xs.map { |x| note_info x }
+  ret
 end
 
 
-
-##| define :pc do |p|
-##|   p % 12
+##| class SonicPi::Note
+##|   def pc
+##|     self.midi_note % 12
+##|   end
 ##| end
 
-define :pc? do |p1,p2|
-  p1 % 12 == p2 % 12
-end
+
+##| class SonicPi::Core::RingVector
+##|   def pc
+##|     """
+##|     return the pitch class of each note in the ring
+##|     """
+##|     return self.map{|el| el % 12 }
+##|   end
+
+##|   def pc? (n)
+##|     """
+##|     return true if any notes in the ring are in the pitch class of n
+##|     """
+##|     self.any? {|el| el % 12 == n % 12 }
+##|   end
 
 
-define :rand_pc do |lo, hi, mode|
-  ##| puts "find random pc in range:: ", lo, hi, "pc:: ", pc
-  filteredRange =  (range lo, hi, inclusive: false).to_a.select do |p|
-    mode.pc? p
+##| end
+
+
+
+define :pitch_class do |p|
+  """ return the pitch class of an enumeration or a number"""
+  
+  if p.respond_to?(:map)
+    p.map { |x| x % 12 }
+  elsif p.respond_to?(:to_i)
+    p.to_i % 12
+  else
+    p % 12
   end
-  ##| puts "\tfilteredRange = #{filteredRange} "
-  filteredRange.choose
 end
 
-##| puts rand_pc 2,11, (ring 0,3,7)
-##| stop
+
+define :pc? do |p,pc|
+  """ Test for membership of p in pitch class  """
+  if pc.respond_to?(:member?)
+    return  (pitch_class pc).member?(pitch_class p)
+  else
+    
+    (pitch_class p) == (pitch_class pc)
+  end
+end
+
+
+define :rand_pc do |notes,pc|
+  """ choose a random note from range that is in pitchclass, pc"""
+  
+  (filter_pc notes,pc).choose
+end
+
+
+define :filter_pc do |notes, pc|
+  """ filter an enumeration of notes returning only those that are in the
+pitch class, pc"""
+  notes.to_a.select { |x| pc? x, pc }
+end
+
+
+
+define :pc_delete do |p, pc|
+  """ remove pitch from pitchclass. return new pitchclass or
+copy of old if the pitchclass does not exist"""
+  
+  arr = pc.to_a
+  
+  arr.delete_if { |n| pc? n, p }
+  
+  return SonicPi::Core::RingVector.new arr
+  
+end
+
 
 define :make_chord do |lo, up, num , notes|
   """
 take the range and find pitches that match pc
 within the range. Return num notes
 """
-  pc = notes.pc
-  ##| puts "make_chord from #{pc}"
-  mychord = ring  #[]
-  ##| hack to copy pc so we don't alter it
-  mypc = pc.to_a - []
+  pc = pitch_class notes ##.pc
+  mychord = []  #[]
+  
   l = lo
   u = up
+  rng = u - l
+  gap = rng / num
   
   num.times do
-    rng = u - l
-    gap = rng / num
+    ##| puts "\t rnge = ", (u-l)
     
-    pitch = rand_pc l, l+gap, pc
-    
+    pitch = rand_pc (range l, l+gap), pc
     #try the whole range for a pitch if we didn't get one in the window
-    pitch = rand_pc l, u, pc if pitch.nil?
+    pitch = rand_pc (range lo, up), pc if pitch.nil?
     
-    mychord = mychord.push(pitch) if not pitch.nil?
+    mychord << pitch if not pitch.nil?
     
     #remove pitch from pc if it exists
     ##| puts "pitch = #{pitch}, pc = #{pc}"
     if not pitch.nil? then
       ##| puts "deleting pitch, #{pitch} from #{pc}"
-      pc = pc_delete pc, pitch
+      pc = pc_delete pitch, pc
       ##| puts "...resulting in pitch class of : #{pc}"
     end
     ##| puts "pc= #{pc}"
@@ -85,70 +119,33 @@ within the range. Return num notes
     l += gap
   end
   
-  puts ":make_chord => #{mychord}"
+  ##| puts ":make_chord => #{mychord}"
   
-  return mychord
+  return SonicPi::Core::RingVector.new mychord
   
-end
-
-pc = (scale 0, :aeolian).take 7
-make_chord 50, 70, 2, pc
-
-
-define :pc_ivl do |degree, mode, num = 3|
-  """
-return the pitch class for the chord degree passed in
-"""
-  return (chord_degree degree, 0, mode, num).pc
 end
 
 
 
-
-define :pc_relative do |pitch, offset, mode|
-  """
-given a note; if the note is in the group then return
-the pitch that is offset positions away from note; if offset pushes
-beyond the max or min of mode then the note in the proper octave will be 
-returned.
-  """
+define :pc_relative do |p, offset, pc|
+  """ shift a pitch within a offset places within a pitch class"""
   
-  puts "got here, pc_relative with mode = #{mode}"
   
-  return pitch if offset == 0
+  return p if offset == 0
+  
   step = offset > 0 ? 1 : -1
   
-  p = pitch.to_i #this way we can handle symbols
-  cnt = 0
+  #this way we can handle symbols
+  p = p.to_i
   
-  while cnt != offset.abs do
+  cnt = offset.abs
+  
+  while cnt > 0 do
       p += step
-      cnt += 1 if mode.pc? p
-      ##| puts "got 1 #{p}" if mode.pc? p
+      cnt -= 1 if (pc? p, pc)
     end
     return p
     
   end ## BUG in SonicPi formatting; this is the end of the method
-  
-  
-  
-  
-  
-  define :pc_delete do |aRing, pitch|
-    """
-given a mode return the mode with any pitches
-in the same pitch class as pitch removed
-"""
-    
-    arr = aRing.pc.to_a.delete_if{ |p|  p == pitch % 12 }
-    
-    return SonicPi::Core::RingVector.new arr
-    
-  end
-  
-  ##| scl = (scale 0, :aeolian ).take 7
-  ##| scl_ =  pc_delete(scl, 50)
-  ##| puts scl, scl_
-  
   
   
