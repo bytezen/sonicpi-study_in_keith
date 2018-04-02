@@ -57,14 +57,14 @@ define :pc? do |p,pc|
 end
 
 
-define :rand_pc do |notes,pc|
+define :pc_rand do |notes,pc|
   """ choose a random note from range that is in pitchclass, pc"""
   
-  (filter_pc notes,pc).choose
+  (pc_filter notes,pc).choose
 end
 
 
-define :filter_pc do |notes, pc|
+define :pc_filter do |notes, pc|
   """ filter an enumeration of notes returning only those that are in the
 pitch class, pc"""
   notes.to_a.select { |x| pc? x, pc }
@@ -101,9 +101,9 @@ within the range. Return num notes
   num.times do
     ##| puts "\t rnge = ", (u-l)
     
-    pitch = rand_pc (range l, l+gap), pc
+    pitch = pc_rand (range l, l+gap), pc
     #try the whole range for a pitch if we didn't get one in the window
-    pitch = rand_pc (range lo, up), pc if pitch.nil?
+    pitch = pc_rand (range lo, up), pc if pitch.nil?
     
     mychord << pitch if not pitch.nil?
     
@@ -148,5 +148,5 @@ define :pc_relative do |p, offset, pc|
     
   end ## BUG in SonicPi formatting; this is the end of the method
   
-
+  
   
